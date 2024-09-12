@@ -129,18 +129,21 @@ function submenu_1_page() {
 
             <label style="font-family: 'B Mitra', sans-serif;font-size: 26px;color: unset;"for="order_ids">سفارشات را انتخاب کنید:</label><br>
             <?php
-            // گرفتن لیست سفارشات از WooCommerce
+            // گرفتن لیست تمام سفارشات از WooCommerce
             $args = array(
                 'limit' => -1, // نمایش تمام سفارشات
-                'status' => 'completed', // فقط سفارشات تکمیل‌شده
             );
             $orders = wc_get_orders($args);
 
-            // نمایش چک‌باکس برای هر سفارش
-            foreach ($orders as $order) {
-                if (!is_a($order, 'WC_Order_Refund')) {
-                    echo '<input type="checkbox" name="order_ids[]" value="' . $order->get_id() . '"> سفارش شماره ' . $order->get_id() . ' - ' . $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() . '<br>';
+            // بررسی اگر سفارش وجود ندارد
+            if (is_array($orders) && !empty($orders)) {
+                foreach ($orders as $order) {
+                    if (is_a($order, 'WC_Order')) {  // بررسی معتبر بودن سفارش
+                        echo '<input type="checkbox" name="order_ids[]" value="' . esc_attr($order->get_id()) . '"> سفارش شماره ' . esc_html($order->get_id()) . ' - ' . esc_html($order->get_billing_first_name()) . ' ' . esc_html($order->get_billing_last_name()) . '<br>';
+                    }
                 }
+            } else {
+                echo '<p>هیچ سفارشی وجود ندارد.</p>';
             }
             ?>
             <input style="margin-top: 20px;margin-right: 20px;padding: 10px 20px;border-radius: 5px;font-family: 'B Mitra', sans-serif;font-size: 16px;cursor: pointer;" type="submit" name="submit_orders" value="ذخیره">
@@ -148,8 +151,10 @@ function submenu_1_page() {
     </div>
 
     <?php
+    // بررسی ارسال فرم و وجود سفارشات
     if (isset($_POST['submit_orders']) && isset($_POST['order_ids'])) {
         global $wpdb;
+
         $table_name_input = sanitize_text_field($_POST['table_name']);
         $order_ids = $_POST['order_ids'];
 
@@ -157,44 +162,48 @@ function submenu_1_page() {
         foreach ($order_ids as $order_id) {
             $order = wc_get_order($order_id);
 
-            if ($order) {
+            if ($order && is_a($order, 'WC_Order')) {  // بررسی معتبر بودن سفارش
                 foreach ($order->get_items() as $item_id => $item) {
-                    $product_id = $item->get_product_id();
-                    $product_name = $item->get_name();
-                    $quantity = $item->get_quantity();
-                    $product_price = $item->get_total() / $quantity; // محاسبه قیمت واحد
-                    $total_price = $item->get_total();
+                    if (is_a($item, 'WC_Order_Item_Product')) {  // بررسی معتبر بودن آیتم‌های سفارش
+                        $product_id = $item->get_product_id();
+                        $product_name = $item->get_name();
+                        $quantity = $item->get_quantity();
+                        $product_price = $item->get_total() / $quantity; // محاسبه قیمت واحد
+                        $total_price = $item->get_total();
 
-                    // ذخیره اطلاعات هر محصول در جدول سفارشی
-                    $table_name = $wpdb->prefix . 'custom_order_items';
-                    $wpdb->insert(
-                        $table_name,
-                        array(
-                            'table_name' => $table_name_input,
-                            'order_id' => $order_id,
-                            'product_id' => $product_id,
-                            'product_name' => $product_name,
-                            'quantity' => $quantity,
-                            'product_price' => $product_price,
-                            'total_price' => $total_price,
-                        ),
-                        array(
-                            '%s', // table_name
-                            '%d', // order_id
-                            '%d', // product_id
-                            '%s', // product_name
-                            '%d', // quantity
-                            '%f', // product_price
-                            '%f', // total_price
-                        )
-                    );
+                        // ذخیره اطلاعات هر محصول در جدول سفارشی
+                        $table_name = $wpdb->prefix . 'custom_order_items';
+                        $wpdb->insert(
+                            $table_name,
+                            array(
+                                'table_name' => $table_name_input,
+                                'order_id' => $order_id,
+                                'product_id' => $product_id,
+                                'product_name' => $product_name,
+                                'quantity' => $quantity,
+                                'product_price' => $product_price,
+                                'total_price' => $total_price,
+                            ),
+                            array(
+                                '%s', // table_name
+                                '%d', // order_id
+                                '%d', // product_id
+                                '%s', // product_name
+                                '%d', // quantity
+                                '%f', // product_price
+                                '%f', // total_price
+                            )
+                        );
+                    }
                 }
             }
-        }
+}
 
         echo '<h2 style="direction: rtl;text-align: center;border: 2px solid;padding: 10px;margin-top: 80px;">سفارشات با موفقیت ذخیره شدند.</h2>';
     }
 }
+
+
 
 function submenu_2_page() {
     global $wpdb;
