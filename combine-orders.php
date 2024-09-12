@@ -251,9 +251,69 @@ function submenu_2_page() {
             </tbody>
         </table>
 
+        <!-- فرم اضافه کردن سفارش جدید -->
+        <h2 style="direction: rtl;">افزودن سفارش جدید</h2>
+        <form method="post" action="">
+            <label style="font-family: 'B Mitra', sans-serif;">نام جدول:</label>
+            <input type="text" name="table_name" required><br><br>
+
+            <label style="font-family: 'B Mitra', sans-serif;">شماره سفارش:</label>
+            <input type="number" name="order_id" required><br><br>
+
+            <label style="font-family: 'B Mitra', sans-serif;">شناسه محصول:</label>
+            <input type="number" name="product_id" required><br><br>
+
+            <label style="font-family: 'B Mitra', sans-serif;">نام محصول:</label>
+            <input type="text" name="product_name" required><br><br>
+
+            <label style="font-family: 'B Mitra', sans-serif;">تعداد:</label>
+            <input type="number" name="quantity" required><br><br>
+
+            <label style="font-family: 'B Mitra', sans-serif;">قیمت واحد:</label>
+            <input type="number" step="0.01" name="product_price" required><br><br>
+
+            <input style="margin-top: 20px;padding:
+10px 20px;border-radius: 5px;background-color: #0073aa;color: white;font-family: 'B Mitra', sans-serif;font-size: 16px;cursor: pointer;" type="submit" name="add_order" value="افزودن سفارش">
+        </form>
     </div>
 
     <?php
+    // پردازش اضافه کردن سفارش جدید
+    if (isset($_POST['add_order'])) {
+        $table_name_input = sanitize_text_field($_POST['table_name']);
+        $order_id = intval($_POST['order_id']);
+        $product_id = intval($_POST['product_id']);
+        $product_name = sanitize_text_field($_POST['product_name']);
+        $quantity = intval($_POST['quantity']);
+        $product_price = floatval($_POST['product_price']);
+        $total_price = $quantity * $product_price;
+
+        // ذخیره سفارش جدید در جدول
+        $wpdb->insert(
+            $table_name,
+            array(
+                'table_name' => $table_name_input,
+                'order_id' => $order_id,
+                'product_id' => $product_id,
+                'product_name' => $product_name,
+                'quantity' => $quantity,
+                'product_price' => $product_price,
+                'total_price' => $total_price,
+            ),
+            array(
+                '%s', // table_name
+                '%d', // order_id
+                '%d', // product_id
+                '%s', // product_name
+                '%d', // quantity
+                '%f', // product_price
+                '%f', // total_price
+            )
+        );
+
+        echo '<h2 style="direction: rtl;text-align: center;color: green;">سفارش جدید با موفقیت اضافه شد.</h2>';
+    }
+
     // ویرایش سفارش
     if (isset($_POST['edit_order']) && isset($_POST['edit_order_id'])) {
         $order_id = intval($_POST['edit_order_id']);
@@ -271,8 +331,7 @@ function submenu_2_page() {
                     <input type="number" name="order_id" value="<?php echo esc_attr($order->order_id); ?>" readonly><br><br>
 
                     <label style="font-family: 'B Mitra', sans-serif;">شناسه محصول:</label>
-                    <input type="number" name="product_id" value="<?php echo
-esc_attr($order->product_id); ?>" readonly><br><br>
+                    <input type="number" name="product_id" value="<?php echo esc_attr($order->product_id); ?>" readonly><br><br>
 
                     <label style="font-family: 'B Mitra', sans-serif;">نام محصول:</label>
                     <input type="text" name="product_name" value="<?php echo esc_attr($order->product_name); ?>" readonly><br><br>
@@ -759,8 +818,8 @@ add_action('admin_footer', 'add_pdf_generation_script');
 function display_custom_order_tables_by_name() {
     global $wpdb;
 
-    // دریافت لیست جداول سفارشی از متا
-    $query = "SELECT DISTINCT meta_value FROM {$wpdb->prefix}postmeta WHERE meta_key = '_custom_table_name'";
+    // دریافت لیست جداول سفارشی از دیتابیس
+    $query = "SELECT DISTINCT table_name FROM {$wpdb->prefix}custom_order_items"; // لیست جداول ذخیره شده در custom_order_items
     $results = $wpdb->get_results($query);
 
     ?>
@@ -772,8 +831,7 @@ function display_custom_order_tables_by_name() {
                 <?php
                 if (!empty($results)) {
                     foreach ($results as $row) {
-                        echo '<option value="' . esc_attr($row->meta_value) . '">' .
-esc_html($row->meta_value) . '</option>';
+                        echo '<option value="' . esc_attr($row->table_name) . '">' . esc_html($row->table_name) . '</option>';
                     }
                 } else {
                     echo '<option value="">هیچ جدولی یافت نشد</option>';
@@ -790,10 +848,11 @@ esc_html($row->meta_value) . '</option>';
         $table_name_input = sanitize_text_field($_POST['table_name']);
 
         // دریافت سفارشاتی که با این نام جدول ذخیره شده‌اند
-        $query = $wpdb->prepare("SELECT post_id FROM {$wpdb->prefix}postmeta WHERE meta_key = '_custom_table_name' AND meta_value = %s", $table_name_input);
+        $query = $wpdb->prepare("SELECT * FROM {$wpdb->prefix}custom_order_items WHERE table_name = %s", $table_name_input);
         $order_results = $wpdb->get_results($query);
 
         if (!empty($order_results)) {
+            $total_sum = 0;  // متغیر برای ذخیره مجموع قیمت سفارشات
             ?>
             <h2 style="direction: rtl;margin-top: 50px;margin-right: 40px;margin-bottom: 40px;border: 2px solid;text-align: center;padding: 10px;color: blue;">سفارشات مرتبط با جدول: <?php echo esc_html($table_name_input); ?></h2>
             <table style="direction:rtl;margin-right: 20px;" id="orders_table" class="wp-list-table widefat fixed striped">
@@ -810,43 +869,85 @@ esc_html($row->meta_value) . '</option>';
                 <tbody>
                     <?php
                     foreach ($order_results as $row) {
-                        $order = wc_get_order($row->post_id);
-                        if ($order) {
-                            foreach ($order->get_items() as $item_id => $item) {
-                                $product = $item->get_product();
-                                $product_image = wp_get_attachment_image_src(get_post_thumbnail_id($product->get_id()), 'thumbnail')[0]; // دریافت URL عکس
-                                $product_name = $item->get_name();
-                                $product_price = $product->get_price();
-                                $product_quantity = $item->get_quantity();
+                        // فرض می‌کنیم اطلاعات محصول در custom_order_items ذخیره شده است
+                        $product_id = $row->product_id;
+                        $product = wc_get_product($product_id);
+                        $product_image = wp_get_attachment_image_src(get_post_thumbnail_id($product_id), 'thumbnail')[0]; // دریافت URL عکس
+                        $product_name = $row->product_name;
+                        $product_price = $row->product_price;
+                        $product_quantity = $row->quantity;
+                        $total_price = $row->total_price;
 
-                                // محاسبه تخفیف آیتم از تخفیف کلی سفارش
-                                $item_total = $item->get_total(); // مبلغ کل آیتم بدون تخفیف
-                                $item_subtotal = $item->get_subtotal(); // مبلغ کل آیتم با تخفیف
-                                $item_discount = $item_subtotal - $item_total; // تخفیف آیتم
+                        // محاسبه تخفیف (فرض: مبلغ کل - قیمت نهایی)
+                        $item_discount = ($product_price * $product_quantity) - $total_price;
 
-                                ?>
-                                <tr>
-                                    <td><img src="<?php echo esc_url($product_image); ?>" width="50" height="50" /></td>
-                                    <td><?php echo esc_html($product_name); ?></td>
-                                    <td><?php echo wc_price($product_price); ?></td>
-                                    <td><?php echo wc_price($item_discount); ?></td>
-                                    <td><?php echo esc_html($product_quantity); ?></td>
-                                    <td><?php echo wc_price($item_total); ?></td>
-                                </tr>
-                                <?php
-                            }
-                        }
+                        // افزودن مبلغ کل به مجموع کل
+                        $total_sum += $total_price;
+
+                        ?>
+                        <tr>
+<td><img src="<?php echo esc_url($product_image); ?>" width="50" height="50" /></td>
+                            <td><?php echo esc_html($product_name); ?></td>
+                            <td><?php echo wc_price($product_price); ?></td>
+                            <td><?php echo wc_price($item_discount); ?></td>
+                            <td><?php echo esc_html($product_quantity); ?></td>
+                            <td><?php echo wc_price($total_price); ?></td>
+                        </tr>
+                        <?php
                     }
                     ?>
                 </tbody>
             </table>
 
+            <!-- نمایش مجموع مبلغ کل سفارشات -->
+            <h2 style="direction: rtl;text-align: center;color: green;margin-top: 30px;">مجموع مبلغ کل سفارشات: <?php echo wc_price($total_sum); ?></h2>
+
             <!-- دکمه برای تولید PDF -->
             <button style="float: right;margin-top: 10px;margin-right: 20px;" id="generate_pdf" class="button button-primary">تولید PDF از سفارشات</button>
+
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.14/jspdf.plugin.autotable.min.js"></script>
+            <script>
+                document.getElementById('generate_pdf').addEventListener('click', function () {
+                    const { jsPDF } = window.jspdf;
+                    const doc = new jsPDF({
+                        orientation: 'portrait',
+                        unit: 'mm',
+                        format: 'a4'
+                    });
+
+                    doc.setFontSize(16);
+                    doc.text("گزارش سفارشات", 10, 10);  // عنوان
+
+                    // جدول سفارشات
+                    doc.autoTable({
+                        html: '#orders_table',
+                        styles: {
+                            font: 'Vazir',
+                            fontStyle: 'normal',
+                            textColor: [0, 0, 0],
+                        },
+                        startY: 20,
+                        margin: { top: 30 },
+                        columnStyles: {
+                            0: { cellWidth: 20, halign: 'right' },  // راست‌چین کردن ستون‌ها
+                            1: { cellWidth: 30, halign: 'right' },
+                            2: { cellWidth: 25, halign: 'right' },
+                            3: { cellWidth: 25, halign: 'right' },
+                            4: { cellWidth: 90, halign: 'right' }
+                        }
+                    });
+
+                    // اضافه کردن مجموع مبلغ کل به PDF
+                    doc.text("مجموع مبلغ کل سفارشات: <?php echo wc_price($total_sum); ?>", 10, doc.lastAutoTable.finalY + 10);
+
+                    doc.save('orders_report.pdf');  // دانلود PDF
+                });
+            </script>
             <?php
         } else {
             echo '<p>هیچ سفارشی برای این جدول یافت نشد.</p>';
-}
+        }
     }
 }
 
