@@ -36,12 +36,7 @@ add_action('admin_menu', 'multiple_orders_menu');
 //     );
 // });
 // add_action('wp_enqueue_scripts', 'my_custom_enqueue_scripts');
-function save_custom_order_data_to_meta($order_ids, $table_name) {
-    foreach ($order_ids as $order_id) {
-        // ذخیره نام جدول در متای هر سفارش
-        update_post_meta($order_id, '_custom_table_name', sanitize_text_field($table_name));
-    }
-}
+
 function multiple_orders_menu() {
     add_menu_page(
         'ووکامرس پیشرفته',    // عنوان صفحه
@@ -74,39 +69,6 @@ function multiple_orders_menu() {
         'custom-order-tables-by-name',
         'display_custom_order_tables_by_name'    // تابع نمایش صفحه ساب منو ۱
     );
-    // add_submenu_page(
-    //     'orders-by-ids',
-    //     'گزارش ماهانه فروش و خرید',
-    //     'گزارش ماهانه فروش و خرید',
-    //     'manage_options',
-    //     'submenu-4',
-    //     'submenu_4_page'
-    // );
-
-    // add_submenu_page(
-    //     'orders-by-ids',
-    //     'نمودار خرید و فروش',
-    //     'نمودار خرید و فروش',
-    //     'manage_options',
-    //     'submenu-5',
-    //     'submenu_5_page'
-    // );
-    // add_submenu_page(
-    //     'orders-by-ids',
-    //     'نمودار خرید هر فروشگاه',
-    //     'نمودار خرید هر فروشگاه',
-    //     'manage_options',
-    //     'submenu-6',
-    //     'submenu_6_page'
-    // );
-    // add_submenu_page(
-    //     'orders-by-ids',
-    //     'پروفایل اختصاصی هر خریدار',
-    //     'پروفایل اختصاصی هر خریدار',
-    //     'manage_options',
-    //     'submenu-7',
-    //     'submenu_7_page'
-    // );
     add_submenu_page(
         'orders-by-ids',
         'حاشیه سود',
@@ -117,7 +79,13 @@ function multiple_orders_menu() {
     );
 }
 
-
+// تابع برای ذخیره متای سفارشات انتخاب شده
+function save_custom_order_data_to_meta($order_ids, $table_name) {
+    foreach ($order_ids as $order_id) {
+        // ذخیره نام جدول در متای هر سفارش
+        update_post_meta($order_id, '_custom_table_name', sanitize_text_field($table_name));
+    }
+}
 
 global $custom_order_table_db_version;
 $custom_order_table_db_version = '1.4';
@@ -125,45 +93,46 @@ $custom_order_table_db_version = '1.4';
 // ایجاد جدول سفارشی در دیتابیس
 function custom_order_table_install() {
     global $wpdb;
-    global $custom_order_table_db_version;
-
-    $table_name = $wpdb->prefix . 'custom_order_tables'; // نام جدول
+    $table_name = $wpdb->prefix . 'custom_order_items'; // نام جدول
     $charset_collate = $wpdb->get_charset_collate();
 
     // کوئری ایجاد جدول
     $sql = "CREATE TABLE $table_name (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
         table_name varchar(255) NOT NULL,
-        order_data longtext NOT NULL,
+        order_id bigint(20) NOT NULL,
+        product_id bigint(20) NOT NULL,
+        product_name varchar(255) NOT NULL,
+        quantity int(11) NOT NULL,
+        product_price decimal(10, 2) NOT NULL,
+        total_price decimal(10, 2) NOT NULL,
         PRIMARY KEY  (id)
     ) $charset_collate;";
 
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
     dbDelta($sql);
-
-    // بررسی ایجاد جدول
-    if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
-        error_log("خطا: جدول $table_name ایجاد نشد.");
-    } else {
-        update_option('custom_order_table_db_version', $custom_order_table_db_version);
-    }
 }
 register_activation_hook(__FILE__, 'custom_order_table_install');
 
-// صفحه مدیریت پلاگین برای ذخیره سفارشات
+
+
+
+
+
 function submenu_1_page() {
     ?>
     <div class="wrap">
-        <h1 style="direction: rtl;font-family: 'B Mitra', sans-serif;font-size: 36px;font-weight: bold;color: #000000;text-align: center;border: 2px solid #000000;padding: 10px;margin: 20px;border-radius: 8px;background-color: #f0f0f0;margin-bottom: 60px;">جمع بندی کالا ها بر اساس سفارش های انتخاب شده</h1>
+        <h1 style="direction: rtl;font-family: 'B Mitra', sans-serif;font-size: 36px;font-weight: bold;color: #000000;text-align: center;border: 2px solid #000000;padding: 10px;margin: 20px;border-radius: 8px;background-color: #f0f0f0;margin-bottom: 60px;">ذخیره سفارشات انتخاب‌شده</h1>
         <form style="direction: rtl;" method="post" action="">
-            <label style="font-family: 'B Mitra', sans-serif;font-size: 26px;color: unset;"for="table_name">نام جدول را وارد کنید:</label>
-            <input style="font-size: 16px;color: #333;background-color: #f9f9f9;border: 1px solid;border-radius: 5px;" type="text" name="table_name" required><br><br>
+            <label style="font-family: 'B Mitra', sans-serif;font-size: 26px;color: unset;" for="table_name">نام جدول را وارد کنید:</label><br>
+            <input type="text" name="table_name" required><br><br>
 
-            <label style="font-family: 'B Mitra', sans-serif;font-size: 26px;color: unset;" for="order_ids">سفارشات را انتخاب کنید:</label><br>
+            <label style="font-family: 'B Mitra', sans-serif;font-size: 26px;color: unset;"for="order_ids">سفارشات را انتخاب کنید:</label><br>
             <?php
-            // گرفتن لیست سفارشات
+            // گرفتن لیست سفارشات از WooCommerce
             $args = array(
                 'limit' => -1, // نمایش تمام سفارشات
+                'status' => 'completed', // فقط سفارشات تکمیل‌شده
             );
             $orders = wc_get_orders($args);
 
@@ -174,215 +143,181 @@ function submenu_1_page() {
                 }
             }
             ?>
-            
-            <input style="margin-top: 20px;margin-right: 20px;padding: 10px 20px;border-radius: 5px;font-family: 'B Mitra', sans-serif;font-size: 16px;cursor: pointer;transition: background-color 0.3s ease;" type="submit" name="submit_orders" value="ذخیره">
+            <input style="margin-top: 20px;margin-right: 20px;padding: 10px 20px;border-radius: 5px;font-family: 'B Mitra', sans-serif;font-size: 16px;cursor: pointer;" type="submit" name="submit_orders" value="ذخیره">
         </form>
     </div>
-    <?php
 
-    if (isset($_POST['submit_orders']) && isset($_POST['order_ids']) && isset($_POST['table_name'])) {
+    <?php
+    if (isset($_POST['submit_orders']) && isset($_POST['order_ids'])) {
+        global $wpdb;
         $table_name_input = sanitize_text_field($_POST['table_name']);
         $order_ids = $_POST['order_ids'];
 
-        // ذخیره نام جدول در متای سفارشات
-        save_custom_order_data_to_meta($order_ids, $table_name_input);
+        // ذخیره اطلاعات سفارشات انتخاب‌شده در جدول سفارشی
+        foreach ($order_ids as $order_id) {
+            $order = wc_get_order($order_id);
 
-        echo '<h2 style="direction: rtl;text-align: center;border: 2px solid;padding: 10px;margin-top: 80px;">جدول با نام ' . esc_html($table_name_input) . ' ذخیره شد.</h2>';
+            if ($order) {
+                foreach ($order->get_items() as $item_id => $item) {
+                    $product_id = $item->get_product_id();
+                    $product_name = $item->get_name();
+                    $quantity = $item->get_quantity();
+                    $product_price = $item->get_total() / $quantity; // محاسبه قیمت واحد
+                    $total_price = $item->get_total();
+
+                    // ذخیره اطلاعات هر محصول در جدول سفارشی
+                    $table_name = $wpdb->prefix . 'custom_order_items';
+                    $wpdb->insert(
+                        $table_name,
+                        array(
+                            'table_name' => $table_name_input,
+                            'order_id' => $order_id,
+                            'product_id' => $product_id,
+                            'product_name' => $product_name,
+                            'quantity' => $quantity,
+                            'product_price' => $product_price,
+                            'total_price' => $total_price,
+                        ),
+                        array(
+                            '%s', // table_name
+                            '%d', // order_id
+                            '%d', // product_id
+                            '%s', // product_name
+                            '%d', // quantity
+                            '%f', // product_price
+                            '%f', // total_price
+                        )
+                    );
+                }
+            }
+        }
+
+        echo '<h2 style="direction: rtl;text-align: center;border: 2px solid;padding: 10px;margin-top: 80px;">سفارشات با موفقیت ذخیره شدند.</h2>';
     }
 }
 
-// تابع نمایش ساب‌منو برای حذف سفارش‌ها
 function submenu_2_page() {
     global $wpdb;
+    $table_name = $wpdb->prefix . 'custom_order_items';
 
-    // دریافت لیست جداول سفارشی از متای سفارشات
-    $query = "SELECT DISTINCT meta_value FROM {$wpdb->prefix}postmeta WHERE meta_key = '_custom_table_name'";
-    $results = $wpdb->get_results($query);
+    // دریافت جزئیات سفارشات از جدول سفارشی
+    $orders = $wpdb->get_results("SELECT * FROM $table_name");
 
     ?>
     <div class="wrap">
-        <h1 style="direction: rtl;font-family: 'B Mitra', sans-serif;font-size: 36px;font-weight: bold;color: #000000;text-align: center;border: 2px solid #000000;padding: 10px;margin: 20px;border-radius: 8px;background-color: #f0f0f0;margin-bottom: 60px;">ویرایش و مدیریت سفارش‌ها</h1>
+        <h1 style="direction: rtl;font-family: 'B Mitra', sans-serif;font-size: 36px;font-weight: bold;color: #000000;text-align: center;border: 2px solid #000000;padding: 10px;margin: 20px;border-radius: 8px;background-color: #f0f0f0;margin-bottom: 60px;">لیست سفارشات و ویرایش جزئیات</h1>
         
-        <!-- جدول نمایش جداول ذخیره شده -->
+        <!-- نمایش سفارشات -->
         <table style="direction: rtl;margin-right: 20px;" class="wp-list-table widefat fixed striped">
             <thead>
                 <tr>
                     <th style="text-align: right">نام جدول</th>
-                    <th style="text-align: right">مجموع مبلغ سفارشات</th>
-                    <th style="text-align: right">عملیات</th>
+                    <th style="text-align: right">شماره سفارش</th>
+                    <th style="text-align: right">شناسه محصول</th>
+                    <th style="text-align: right">نام محصول</th>
+                    <th style="text-align: right">تعداد</th>
+                    <th style="text-align: right">قیمت واحد</th>
+                    <th style="text-align: right">مبلغ کل</th>
+                    <th style="text-align: right">ویرایش</th>
                 </tr>
             </thead>
             <tbody>
                 <?php
-                if (!empty($results)) {
-                    foreach ($results as $row) {
-                        // دریافت مجموع مبلغ سفارشات مربوط به این جدول
-                        $table_name = esc_attr($row->meta_value);
-                        $query = $wpdb->prepare("SELECT post_id FROM {$wpdb->prefix}postmeta WHERE meta_key = '_custom_table_name' AND meta_value = %s", $table_name);
-                        $order_results = $wpdb->get_results($query);
-
-                        $total_sum = 0;
-                        foreach ($order_results as $order_row) {
-                            $order = wc_get_order($order_row->post_id);
-                            if ($order) {
-                                $total_sum += $order->get_total();
-                            }
-                        }
-
+                if (!empty($orders)) {
+                    foreach ($orders as $order) {
                         ?>
                         <tr>
-                            <td><?php echo esc_html($table_name); ?></td>
-                            <td><?php echo wc_price($total_sum); ?></td>
+                            <td><?php echo esc_html($order->table_name); ?></td>
+                            <td><?php echo esc_html($order->order_id); ?></td>
+                            <td><?php echo esc_html($order->product_id); ?></td>
+                            <td><?php echo esc_html($order->product_name); ?></td>
+                            <td><?php echo esc_html($order->quantity); ?></td>
+                            <td><?php echo wc_price($order->product_price); ?></td>
+                            <td><?php echo wc_price($order->total_price); ?></td>
                             <td>
-                                <!-- دکمه ویرایش که جدول مربوطه را باز می‌کند -->
                                 <form method="post" action="">
-                                    <input type="hidden" name="edit_table_name" value="<?php echo esc_attr($table_name); ?>">
-                                    <input style="padding: 5px 10px;border-radius: 5px;background-color: #0073aa;color: white;font-family: 'B Mitra', sans-serif;font-size: 16px;cursor: pointer;" type="submit" name="edit_table" value="ویرایش">
+                                    <input type="hidden" name="edit_order_id" value="<?php echo esc_attr($order->id); ?>">
+                                    <input type="hidden" name="table_name" value="<?php echo esc_attr($order->table_name); ?>">
+                                    <input style="padding: 5px 10px;border-radius: 5px;background-color: #0073aa;color: white;font-family: 'B Mitra', sans-serif;font-size: 16px;cursor: pointer;" type="submit" name="edit_order" value="ویرایش">
                                 </form>
                             </td>
                         </tr>
                         <?php
                     }
                 } else {
-                    echo '<tr><td colspan="3" style="text-align:center;">هیچ جدولی یافت نشد</td></tr>';
+                    echo '<tr><td colspan="8" style="text-align:center;">هیچ سفارشی یافت نشد</td></tr>';
                 }
                 ?>
             </tbody>
         </table>
+
     </div>
 
     <?php
-    // نمایش سفارشات برای ویرایش اگر کاربر دکمه ویرایش را زده باشد
-    if (isset($_POST['edit_table']) && isset($_POST['edit_table_name'])) {
-        $table_name = sanitize_text_field($_POST['edit_table_name']);
-        
-        // دریافت سفارشات مرتبط با جدول انتخاب شده
-        $query = $wpdb->prepare("SELECT post_id FROM {$wpdb->prefix}postmeta WHERE meta_key = '_custom_table_name' AND meta_value = %s", $table_name);
-        $order_results = $wpdb->get_results($query);
-        
-        if (!empty($order_results)) {
-            ?>
-            <div class="wrap">
-                <h2 style="direction: rtl;font-family: 'B Mitra', sans-serif;font-size: 30px;text-align: center;">ویرایش سفارشات برای جدول: <?php echo esc_html($table_name); ?></h2>
-                <!-- فرم برای انتخاب سفارش -->
-                <form method="post" action="">
-                    <label style="font-family: 'B Mitra', sans-serif;">انتخاب سفارش برای ویرایش:</label>
-                    <select name="order_id" required>
-                        <?php
-foreach ($order_results as $row) {
-                            $order = wc_get_order($row->post_id);
-                            if ($order) {
-                                echo '<option value="' . esc_attr($order->get_id()) . '">سفارش شماره ' . esc_html($order->get_id()) . ' - ' . esc_html($order->get_billing_first_name()) . ' ' . esc_html($order->get_billing_last_name()) . '</option>';
-                            }
-                        }
-                        ?>
-                    </select>
-                    <input type="hidden" name="table_name" value="<?php echo esc_attr($table_name); ?>">
-                    <input style="margin-top: 20px;padding: 10px 20px;border-radius: 5px;background-color: #0073aa;color: white;font-family: 'B Mitra', sans-serif;font-size: 16px;cursor: pointer;" type="submit" name="edit_order" value="ویرایش سفارش">
-                </form>
-            </div>
-            <?php
-        }
-    }
-
-    // نمایش جزئیات سفارش و امکان ویرایش پس از انتخاب سفارش
-    if (isset($_POST['edit_order']) && isset($_POST['order_id'])) {
-        $order_id = intval($_POST['order_id']);
-        $order = wc_get_order($order_id);
+    // ویرایش سفارش
+    if (isset($_POST['edit_order']) && isset($_POST['edit_order_id'])) {
+        $order_id = intval($_POST['edit_order_id']);
+        $order = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $order_id));
 
         if ($order) {
             ?>
             <div class="wrap">
-                <h3 style="direction: rtl;font-family: 'B Mitra', sans-serif;">ویرایش سفارش شماره <?php echo esc_html($order->get_id()); ?></h3>
+                <h3 style="direction: rtl;font-family: 'B Mitra', sans-serif;">ویرایش جزئیات سفارش</h3>
                 <form method="post" action="">
-                    <table style="direction: rtl;margin-right: 20px;" class="wp-list-table widefat fixed striped">
-                        <thead>
-                            <tr>
-                                <th style="text-align: right">محصول</th>
-                                <th style="text-align: right">تعداد</th>
-                                <th style="text-align: right">قیمت</th>
-                                <th style="text-align: right">حذف</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php
-                            foreach ($order->get_items() as $item_id => $item) {
-                                ?>
-                                <tr>
-                                    <td><?php echo esc_html($item->get_name()); ?></td>
-                                    <td>
-                                        <input type="number" name="quantities[<?php echo esc_attr($item_id); ?>]" value="<?php echo esc_attr($item->get_quantity()); ?>" min="1">
-                                    </td>
-                                    <td><?php echo wc_price($item->get_total()); ?></td>
-                                    <td><input type="checkbox" name="delete_items[<?php echo esc_attr($item_id); ?>]" value="1"></td>
-                                </tr>
-                                <?php
-                            }
-                            ?>
-                        </tbody>
-                    </table>
+                    <label style="font-family: 'B Mitra', sans-serif;">نام جدول:</label>
+                    <input type="text" name="table_name" value="<?php echo esc_attr($order->table_name); ?>" readonly><br><br>
 
-                    <!-- بخش اضافه کردن محصول به سفارش -->
-                    <h3 style="direction: rtl;font-family: 'B Mitra', sans-serif;">اضافه کردن محصول جدید به سفارش</h3>
-                    <label style="font-family: 'B Mitra', sans-serif;">انتخاب محصول:</label>
-                    <select name="new_product_id">
-                        <?php
-                        $products = wc_get_products(array('limit' => -1)); // گرفتن تمام محصولات
-                        foreach ($products as $product) {
-                            echo '<option value="' . esc_attr($product->get_id()) . '">' . esc_html($product->get_name()) . '</option>';
-                        }
-                        ?>
-                    </select>
+                    <label style="font-family: 'B Mitra', sans-serif;">شماره سفارش:</label>
+                    <input type="number" name="order_id" value="<?php echo esc_attr($order->order_id); ?>" readonly><br><br>
+
+                    <label style="font-family: 'B Mitra', sans-serif;">شناسه محصول:</label>
+                    <input type="number" name="product_id" value="<?php echo
+esc_attr($order->product_id); ?>" readonly><br><br>
+
+                    <label style="font-family: 'B Mitra', sans-serif;">نام محصول:</label>
+                    <input type="text" name="product_name" value="<?php echo esc_attr($order->product_name); ?>" readonly><br><br>
+
                     <label style="font-family: 'B Mitra', sans-serif;">تعداد:</label>
-                    <input type="number" name="new_product_qty" value="1" min="1">
-                    
-                    <input type="hidden" name="order_id" value="<?php echo esc_attr($order_id); ?>">
-                    <input style="margin-top: 20px;padding: 10px 20px;border-radius: 5px;background-color: #0073aa;color: whi
-te;font-family: 'B Mitra', sans-serif;font-size: 16px;cursor: pointer;" type="submit" name="save_changes" value="ذخیره تغییرات">
+                    <input type="number" name="quantity" value="<?php echo esc_attr($order->quantity); ?>" required><br><br>
+
+                    <label style="font-family: 'B Mitra', sans-serif;">قیمت واحد:</label>
+                    <input type="number" step="0.01" name="product_price" value="<?php echo esc_attr($order->product_price); ?>" required><br><br>
+
+                    <input type="hidden" name="edit_order_id" value="<?php echo esc_attr($order_id); ?>">
+                    <input style="margin-top: 20px;padding: 10px 20px;border-radius: 5px;background-color: #0073aa;color: white;font-family: 'B Mitra', sans-serif;font-size: 16px;cursor: pointer;" type="submit" name="save_order" value="ذخیره تغییرات">
                 </form>
             </div>
             <?php
         }
     }
 
-    // پردازش تغییرات در سفارشات
-    if (isset($_POST['save_changes']) && isset($_POST['order_id'])) {
-        $order_id = intval($_POST['order_id']);
-        $order = wc_get_order($order_id);
+    // ذخیره تغییرات سفارش
+    if (isset($_POST['save_order']) && isset($_POST['edit_order_id'])) {
+        $order_id = intval($_POST['edit_order_id']);
+        $quantity = intval($_POST['quantity']);
+        $product_price = floatval($_POST['product_price']);
+        $total_price = $quantity * $product_price;
 
-        if ($order) {
-            $quantities = $_POST['quantities'];
-            $delete_items = $_POST['delete_items'] ?? array();
-            $new_product_id = intval($_POST['new_product_id']);
-            $new_product_qty = intval($_POST['new_product_qty']);
+        // به‌روزرسانی سفارش در جدول
+        $wpdb->update(
+            $table_name,
+            array(
+                'quantity' => $quantity,
+                'product_price' => $product_price,
+                'total_price' => $total_price,
+            ),
+            array('id' => $order_id),
+            array(
+                '%d', // quantity
+                '%f', // product_price
+                '%f', // total_price
+            ),
+            array('%d') // id
+        );
 
-            foreach ($order->get_items() as $item_id => $item) {
-                if (isset($delete_items[$item_id])) {
-                    // حذف محصول از سفارش
-                    $order->remove_item($item_id);
-                } elseif (isset($quantities[$item_id])) {
-                    // تغییر تعداد محصول
-                    $item->set_quantity($quantities[$item_id]);
-                    $item->calculate_totals();
-                }
-            }
-
-            // اضافه کردن محصول جدید
-            if ($new_product_id && $new_product_qty > 0) {
-                $product = wc_get_product($new_product_id);
-                if ($product) {
-                    $order->add_product($product, $new_product_qty);
-                }
-            }
-
-            $order->calculate_totals();
-            $order->save();
-
-            echo '<h2 style="direction: rtl;text-align: center;color: green;">تغییرات با موفقیت ذخیره شدند.</h2>';
-        }
+        echo '<h2 style="direction: rtl;text-align: center;color: green;">تغییرات با موفقیت ذخیره شدند.</h2>';
     }
 }
-
 // صفحه ساب منو ۴
 function submenu_4_page() {
     ?>
