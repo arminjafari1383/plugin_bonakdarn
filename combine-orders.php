@@ -37,6 +37,202 @@ add_action('admin_menu', 'multiple_orders_menu');
 // });
 // add_action('wp_enqueue_scripts', 'my_custom_enqueue_scripts');
 
+function save_filtered_orders_callback() {
+    global $wpdb;
+
+    $order_ids = $_POST['order_ids'];
+    $table_name_input = sanitize_text_field($_POST['table_name']);
+
+    if (!empty($order_ids) && !empty($table_name_input)) {
+        foreach ($order_ids as $order_id) {
+            $order = wc_get_order($order_id);
+
+            if ($order) {
+                foreach ($order->get_items() as $item_id => $item) {
+                    $product_id = $item->get_product_id();
+                    $product_name = $item->get_name();
+                    $quantity = $item->get_quantity();
+                    $product_price = $item->get_total() / $quantity; // محاسبه قیمت واحد
+                    $total_price = $item->get_total();
+
+                    // ذخیره اطلاعات هر محصول در جدول سفارشی
+                    $table_name = $wpdb->prefix . 'custom_order_items';
+                    $wpdb->insert(
+                        $table_name,
+                        array(
+                            'table_name' => $table_name_input,
+                            'order_id' => $order_id,
+                            'product_id' => $product_id,
+                            'product_name' => $product_name,
+                            'quantity' => $quantity,
+                            'product_price' => $product_price,
+                            'total_price' => $total_price,
+                        ),
+                        array(
+                            '%s', // table_name
+                            '%d', // order_id
+                            '%d', // product_id
+                            '%s', // product_name
+                            '%d', // quantity
+                            '%f', // product_price
+                            '%f', // total_price
+                        )
+                    );
+                }
+            }
+        }
+        echo 'سفارشات با موفقیت ذخیره شدند.';
+    } else {
+        echo 'خطا: نام جدول یا سفارشات انتخاب‌شده خالی است.';
+    }
+
+    wp_die();
+}
+add_action('wp_ajax_save_filtered_orders', 'save_filtered_orders_callback');
+function filter_orders_callback() {
+    $customer_name = sanitize_text_field($_POST['customer_name']);
+    $order_status = sanitize_text_field($_POST['order_status']);
+
+    // آرگومان‌های فیلتر سفارشات
+    $args = array(
+        'limit' => -1,
+        'status' => $order_status ? array($order_status) : array('completed', 'processing', 'on-hold', 'cancelled'),
+    );
+
+    if (!empty($customer_name)) {
+        $args['billing_first_name'] = $customer_name;
+    }
+
+    $orders = wc_get_orders($args);
+
+    // بررسی اگر سفارشی وجود ندارد
+    if (!empty($orders)) {
+        echo '<ul>';
+        foreach ($orders as $order) {
+            echo '<li><input type="checkbox" name="order_ids[]" value="' . esc_attr($order->get_id()) . '"> سفارش شماره ' . esc_html($order->get_id()) . ' - ' . esc_html($order->get_billing_first_name()) . ' ' . esc_html($order->get_billing_last_name()) . '</li>';
+        }
+        echo '</ul>';
+    } else {
+        echo '<p>هیچ سفارشی برای این فیلترها یافت نشد.</p>';
+    }
+
+    wp_die();  // پایان تابع
+}
+add_action('wp_ajax_filter_orders', 'filter_orders_callback');
+global $custom_order_table_db_version;
+$custom_order_table_db_version = '1.4';
+
+// ایجاد جدول سفارشی در دیتابیس
+function custom_order_table_install() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'custom_order_items'; // نام جدول
+    $charset_collate = $wpdb->get_charset_collate();
+
+    // کوئری ایجاد جدول
+    $sql = "CREATE TABLE $table_name (
+        id mediumint(9) NOT NULL AUTO_INCREMENT,
+        table_name varchar(255) NOT NULL,
+        order_id bigint(20) NOT NULL,
+        product_id bigint(20) NOT NULL,
+        product_name varchar(255) NOT NULL,
+        quantity int(11) NOT NULL,
+        product_price decimal(10, 2) NOT NULL,
+        total_price decimal(10, 2) NOT NULL,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($sql);
+}
+register_activation_hook(__FILE__, 'custom_order_table_install');
+function submenu_1_page() {
+    ?>
+    <div class="wrap">
+        <h1 style="direction: rtl;font-family: 'B Mitra', sans-serif;font-size: 36px;font-weight: bold;color: #000000;text-align: center;border: 2px solid #000000;padding: 10px;margin: 20px;border-radius: 8px;background-color: #f0f0f0;margin-bottom: 60px;">ذخیره سفارشات انتخاب‌شده</h1>
+        
+        <!-- فرم فیلتر سفارشات -->
+        <form id="filter_orders_form" style="direction: rtl; margin-bottom: 20px;">
+            <label style="font-family: 'B Mitra', sans-serif;font-size: 26px;" for="customer_name">نام مشتری:</label><br>
+            <input type="text" id="customer_name" name="customer_name" placeholder="نام مشتری را وارد کنید"><br><br>
+
+            <label style="font-family: 'B Mitra', sans-serif;font-size: 26px;" for="order_status">وضعیت سفارش:</label><br>
+            <select id="order_status" name="order_status">
+                <option value="">همه وضعیت‌ها</option>
+                <?php
+                // دریافت وضعیت‌های سفارش از ووکامرس
+                $statuses = wc_get_order_statuses();
+                foreach ($statuses as $status_key => $status_label) {
+                    echo '<option value="' . esc_attr($status_key) . '">' . esc_html($status_label) . '</option>';
+                }
+                ?>
+            </select><br><br>
+
+            <input type="button" id="filter_orders_button" value="فیلتر" style="padding: 10px 20px;font-family: 'B Mitra', sans-serif;font-size: 16px;cursor: pointer;">
+        </form>
+
+        <!-- نمایش سفارشات فیلتر شده -->
+        <div id="filtered_orders"></div>
+
+        <!-- فرم برای ذخیره سفارشات فیلتر شده -->
+        <form id="save_orders_form" style="display: none; direction: rtl;" method="post" action="">
+            <label style="font-family: 'B Mitra', sans-serif;font-size: 26px;color: unset;" for="table_name">نام جدول را وارد کنید:</label><br>
+            <input type="text" name="table_name" id="table_name" required><br><br>
+            <div id="orders_to_save"></div>
+            <input style="margin-top: 20px;margin-right: 20px;padding: 10px 20px;border-radius: 5px;font-family: 'B Mitra', sans-serif;font-size: 16px;cursor: pointer;" type="button" id="save_orders_button" value="ذخیره">
+        </form>
+
+        <script type="text/javascript">
+            jQuery(document).ready(function($) {
+                // عملکرد فیلتر سفارشات با AJAX
+                $('#filter_orders_button').on('click', function() {
+                    var customer_name = $('#customer_name').val();
+                    var order_status = $('#order_status').val();
+
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'filter_orders',
+                            customer_name: customer_name,
+                            order_status: order_status,
+                        },
+                        success: function(response) {
+                            $('#filtered_orders').html(response);
+                            $('#save_orders_form').show();  // نمایش فرم ذخیره سفارشات
+                        }
+                    });
+                });
+
+                // عملکرد ذخیره سفارشات انتخاب شده با AJAX
+                $('#save_orders_button').on('click', function() {
+                    var table_name = $('#table_name').val();
+                    var order_ids = [];
+                    $('input[name="order_ids[]"]:checked').each(function() {
+                        order_ids.push($(this).val());
+                    });
+
+                    if (order_ids.length > 0 && table_name) {
+                        $.ajax({
+                            url: ajaxurl,
+                            type: 'POST',
+                            data: {
+                                action: 'save_filtered_orders',
+                                order_ids: order_ids,
+                                table_name: table_name,
+                            },
+                            success: function(response) {
+alert(response);  // نمایش پیام موفقیت
+                            }
+                        });
+                    } else {
+                        alert('لطفاً جدول را وارد کنید و حداقل یک سفارش را انتخاب کنید.');
+                    }
+                });
+            });
+        </script>
+    </div>
+    <?php
+}
 function multiple_orders_menu() {
     add_menu_page(
         'ووکامرس پیشرفته',    // عنوان صفحه
@@ -77,130 +273,6 @@ function multiple_orders_menu() {
         'submenu-8',
         'submenu_8_page'
     );
-}
-
-// تابع برای ذخیره متای سفارشات انتخاب شده
-function save_custom_order_data_to_meta($order_ids, $table_name) {
-    foreach ($order_ids as $order_id) {
-        // ذخیره نام جدول در متای هر سفارش
-        update_post_meta($order_id, '_custom_table_name', sanitize_text_field($table_name));
-    }
-}
-
-global $custom_order_table_db_version;
-$custom_order_table_db_version = '1.4';
-
-// ایجاد جدول سفارشی در دیتابیس
-function custom_order_table_install() {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'custom_order_items'; // نام جدول
-    $charset_collate = $wpdb->get_charset_collate();
-
-    // کوئری ایجاد جدول
-    $sql = "CREATE TABLE $table_name (
-        id mediumint(9) NOT NULL AUTO_INCREMENT,
-        table_name varchar(255) NOT NULL,
-        order_id bigint(20) NOT NULL,
-        product_id bigint(20) NOT NULL,
-        product_name varchar(255) NOT NULL,
-        quantity int(11) NOT NULL,
-        product_price decimal(10, 2) NOT NULL,
-        total_price decimal(10, 2) NOT NULL,
-        PRIMARY KEY  (id)
-    ) $charset_collate;";
-
-    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-    dbDelta($sql);
-}
-register_activation_hook(__FILE__, 'custom_order_table_install');
-
-
-
-
-
-
-function submenu_1_page() {
-    ?>
-    <div class="wrap">
-        <h1 style="direction: rtl;font-family: 'B Mitra', sans-serif;font-size: 36px;font-weight: bold;color: #000000;text-align: center;border: 2px solid #000000;padding: 10px;margin: 20px;border-radius: 8px;background-color: #f0f0f0;margin-bottom: 60px;">ذخیره سفارشات انتخاب‌شده</h1>
-        <form style="direction: rtl;" method="post" action="">
-            <label style="font-family: 'B Mitra', sans-serif;font-size: 26px;color: unset;" for="table_name">نام جدول را وارد کنید:</label><br>
-            <input type="text" name="table_name" required><br><br>
-
-            <label style="font-family: 'B Mitra', sans-serif;font-size: 26px;color: unset;"for="order_ids">سفارشات را انتخاب کنید:</label><br>
-            <?php
-            // گرفتن لیست تمام سفارشات از WooCommerce
-            $args = array(
-                'limit' => -1, // نمایش تمام سفارشات
-            );
-            $orders = wc_get_orders($args);
-
-            // بررسی اگر سفارش وجود ندارد
-            if (is_array($orders) && !empty($orders)) {
-                foreach ($orders as $order) {
-                    if (is_a($order, 'WC_Order')) {  // بررسی معتبر بودن سفارش
-                        echo '<input type="checkbox" name="order_ids[]" value="' . esc_attr($order->get_id()) . '"> سفارش شماره ' . esc_html($order->get_id()) . ' - ' . esc_html($order->get_billing_first_name()) . ' ' . esc_html($order->get_billing_last_name()) . '<br>';
-                    }
-                }
-            } else {
-                echo '<p>هیچ سفارشی وجود ندارد.</p>';
-            }
-            ?>
-            <input style="margin-top: 20px;margin-right: 20px;padding: 10px 20px;border-radius: 5px;font-family: 'B Mitra', sans-serif;font-size: 16px;cursor: pointer;" type="submit" name="submit_orders" value="ذخیره">
-        </form>
-    </div>
-
-    <?php
-    // بررسی ارسال فرم و وجود سفارشات
-    if (isset($_POST['submit_orders']) && isset($_POST['order_ids'])) {
-        global $wpdb;
-
-        $table_name_input = sanitize_text_field($_POST['table_name']);
-        $order_ids = $_POST['order_ids'];
-
-        // ذخیره اطلاعات سفارشات انتخاب‌شده در جدول سفارشی
-        foreach ($order_ids as $order_id) {
-            $order = wc_get_order($order_id);
-
-            if ($order && is_a($order, 'WC_Order')) {  // بررسی معتبر بودن سفارش
-                foreach ($order->get_items() as $item_id => $item) {
-                    if (is_a($item, 'WC_Order_Item_Product')) {  // بررسی معتبر بودن آیتم‌های سفارش
-                        $product_id = $item->get_product_id();
-                        $product_name = $item->get_name();
-                        $quantity = $item->get_quantity();
-                        $product_price = $item->get_total() / $quantity; // محاسبه قیمت واحد
-                        $total_price = $item->get_total();
-
-                        // ذخیره اطلاعات هر محصول در جدول سفارشی
-                        $table_name = $wpdb->prefix . 'custom_order_items';
-                        $wpdb->insert(
-                            $table_name,
-                            array(
-                                'table_name' => $table_name_input,
-                                'order_id' => $order_id,
-                                'product_id' => $product_id,
-                                'product_name' => $product_name,
-                                'quantity' => $quantity,
-                                'product_price' => $product_price,
-                                'total_price' => $total_price,
-                            ),
-                            array(
-                                '%s', // table_name
-                                '%d', // order_id
-                                '%d', // product_id
-                                '%s', // product_name
-                                '%d', // quantity
-                                '%f', // product_price
-                                '%f', // total_price
-                            )
-                        );
-                    }
-                }
-            }
-}
-
-        echo '<h2 style="direction: rtl;text-align: center;border: 2px solid;padding: 10px;margin-top: 80px;">سفارشات با موفقیت ذخیره شدند.</h2>';
-    }
 }
 
 
@@ -1249,15 +1321,113 @@ width="400" height="200"></canvas>
     }
 }
 
+add_action('wp_enqueue_scripts','dansh_post_script');
+function dansh_post_script(){
+    wp_enqueue_script(
+        'dypl_script',
+        DANASH_COURSE_SHOP_JS . 'post-like.js',
+        ['jquery'],
 
+    );
+    wp_localize_script(
+        'dypl_script',
+        'dypl',
+        ['ajax_url' => admin_url('admin-ajax.php')]
+    );
+}
+add_filter('the_content','dansh_post_button');
+function dansh_post_button($content){
+    $like_text = __('Like','dansh-post-like');
+    $post_id = get_the_ID();
+    $button = "<button class = 'like-post' type = 'button' data-id='$post_id'>
+    $like_text
+    <span class = 'like-count'>(21)</span>
+     </button>";
+    return $content . $button;
+}
+add_action( 'wp_ajax_dypl_like','dansh_post_like_ajax_callback');
+function dansh_post_like_ajax_callback(){
+    if (! is_user_logged_in()){
 
+    }
+    global $wpdb;
+    $post_id = absint( $_POST['post_id'] );
+    $like = (bool) $_POST['like'];
+    $exists_id = $wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT ID FROM {$wpdb->dypl_post_likes} WHERE post_id = %d AND user_id = %d"
+            ,$post_id
+            ,get_current_user_id()
+        )
+    );
+    if ($exists_id && $like){
+        //you like previously
 
+    }
+    if (! $exists_id && ! $like){
+        //you did not like this post
+    }
+    if( $like ){
+        $like_data = [
+            'post_id' => $post_id,
+            'user_id' => get_current_user_id(),
+            'ip'  => $_SERVER['REMOTE_ADDR'],
+            'liked' => 1,
+            'created_at' => current_time('mysql')
+        ];   
+        $liked = $wpdb->insert(
+            $wpdb->dypl_post_likes,
+            $like_data,
+            ['%d','%d','%s','%d','%s']
+        );
+    }else{
+        $disliked = $wpdb->delete(
+            $wpdb->dypl_post_likes,
+            [
+                'ID' => $exists_id
+            ]
+        );
+    }
+    wp_send_json_error($data);
 
+}
 
+register_activation_hook(__FILE__,'post_like');
+function post_like(){
+    global $wpdb;
+    $table_post_likes = $wpdb->prefix . 'dypl_post_likes';
+    $sql = "
+    CREATE TABLE `wp_dypl_post_likes` (
+  `ID` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `post_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `ip` varchar(15) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `liked` tinyint(1) NOT NULL DEFAULT '1',
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`ID`),
+  KEY `post_id` (`post_id`),
+  KEY `user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+";
+    require_once( ABSPATH. 'wp-admin/includes/upgrade.php');
+    dbDelta($sql);
+}
 
-
-
-
+add_action('wp_head','dansh_post_like_style');
+function dansh_post_like_style(){
+    ?>
+    <style>
+        
+button.like-post {
+    background: #ffffff;
+    border-radius: 4px;
+    padding: 4px 15px;
+    display: inline-block;
+    border: 1px solid #e6cece;
+}
+    </style>
+    <?php
+}
 
 
 
