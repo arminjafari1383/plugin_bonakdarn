@@ -270,8 +270,8 @@ function multiple_orders_menu() {
         'حاشیه سود',
         'حاشیه سود',
         'manage_options',
-        'submenu-8',
-        'submenu_8_page'
+        'submenu-4',
+        'submenu_4_page'
     );
 }
 
@@ -459,7 +459,7 @@ function submenu_2_page() {
     }
 }
 // صفحه ساب منو ۴
-function submenu_4_page() {
+function submenu_10_page() {
     ?>
     <div class="wrap">
         <h1 style = "direction: rtl;font-family: 'B Mitra', sans-serif;font-size: 36px;font-weight: bold;color: #000000;text-align: center;border: 2px solid #000000;padding: 10px;margin: 20px;border-radius: 8px;background-color: #f0f0f0;margin-bottom: 60px;">گزارش ماهانه فروش و خرید</h1>
@@ -1429,6 +1429,183 @@ button.like-post {
     <?php
 }
 
+function submenu_4_page() {
+    ?>
+    <div class="wrap">
+        <h1 style="direction: rtl; font-family: 'B Mitra', sans-serif; font-size: 36px; font-weight: bold; color: #000000; text-align: center; border: 2px solid #000000; padding: 10px; margin: 20px; border-radius: 8px; background-color: #f0f0f0; margin-bottom: 60px;">گزارش فروش و خرید بر اساس هفته و ماه</h1>
+        
+        <!-- فرم برای فیلتر سفارشات بر اساس هفته و ماه -->
+        <form id="filter_orders_form" style="direction: rtl;" method="post" action="">
+            <!-- انتخاب هفته -->
+            <label style="font-family: 'B Mitra', sans-serif; font-size: 20px;" for="week">انتخاب هفته:</label><br>
+            <select id="week" name="week" style="direction: rtl; width: 300px; padding: 10px; margin: 10px 0; font-family: 'B Mitra', sans-serif; font-size: 16px; border: 2px solid #4CAF50; border-radius: 5px;">
+                <option value="">انتخاب هفته</option>
+                <!-- داده‌ها از طریق AJAX پر می‌شوند -->
+            </select><br><br>
 
+            <!-- انتخاب ماه -->
+            <label style="font-family: 'B Mitra', sans-serif; font-size: 20px;" for="month">انتخاب ماه:</label><br>
+            <select id="month" name="month" style="direction: rtl; width: 300px; padding: 10px; margin: 10px 0; font-family: 'B Mitra', sans-serif; font-size: 16px; border: 2px solid #4CAF50; border-radius: 5px;">
+                <option value="">انتخاب ماه</option>
+                <!-- داده‌ها از طریق AJAX پر می‌شوند -->
+            </select><br><br>
+
+            <!-- سایر فیلدهای هزینه‌ها -->
+            <label style="font-family: 'B Mitra', sans-serif; font-size: 20px;" for="machine_cost">هزینه ماشین:</label><br>
+            <input type="text" id="machine_cost" name="machine_cost" style="direction: rtl; width: 300px; padding: 10px; margin: 10px 0;"><br><br>
+
+            <label style="font-family: 'B Mitra', sans-serif; font-size: 20px;" for="worker_cost">هزینه کارگر:</label><br>
+            <input type="text" id="worker_cost" name="worker_cost" style="direction: rtl; width: 300px; padding: 10px; margin: 10px 0;"><br><br>
+
+            <label style="font-family: 'B Mitra', sans-serif; font-size: 20px;" for="sms_cost">هزینه پنل پیامکی:</label><br>
+            <input type="text" id="sms_cost" name="sms_cost" style="direction: rtl; width: 300px; padding: 10px; margin: 10px 0;"><br><br>
+
+            <!-- دکمه ارسال فرم -->
+            <input type="submit" name="submit_report" value="محاسبه گزارش" style="direction: rtl; padding: 10px 20px; border-radius: 5px; font-family: 'B Mitra', sans-serif; font-size: 16px; cursor: pointer;">
+        </form>
+
+        <!-- نمایش نتایج -->
+        <div id="report_results"></div>
+
+        <!-- اسکریپت AJAX برای دریافت داده‌ها -->
+        <script type="text/javascript">
+            jQuery(document).ready(function($) {
+                // فراخوانی AJAX برای دریافت هفته‌ها
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: { action: 'get_weeks' },
+                    success: function(response) {
+                        $('#week').html(response); // پر کردن منوی کشویی هفته‌ها
+                    }
+                });
+
+                // فراخوانی AJAX برای دریافت ماه‌ها
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: { action: 'get_months' },
+                    success: function(response) {
+                        $('#month').html(response); // پر کردن منوی کشویی ماه‌ها
+                    }
+                });
+
+                // ارسال فرم برای محاسبه گزارش
+                $('#filter_orders_form').on('submit', function(e) {
+                    e.preventDefault(); // جلوگیری از ارسال فرم به‌صورت پیش‌فرض
+                    var data = $(this).serialize(); // جمع‌آوری داده‌های فرم
+
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: data + '&action=calculate_report',
+                        success: function(response) {
+$('#report_results').html(response); // نمایش نتایج گزارش
+                        }
+                    });
+                });
+            });
+        </script>
+    </div>
+    <?php
+}
+// دریافت هفته‌ها از سفارشات ووکامرس
+function get_weeks_callback() {
+    global $wpdb;
+
+    // دریافت سفارشات بر اساس هفته
+    $weeks = $wpdb->get_results("
+        SELECT DISTINCT WEEK(post_date) as week_num, YEAR(post_date) as year 
+        FROM {$wpdb->prefix}posts 
+        WHERE post_type = 'shop_order' AND post_status IN ('wc-completed', 'wc-processing')
+        ORDER BY post_date DESC
+    ");
+
+    if (!empty($weeks)) {
+        foreach ($weeks as $week) {
+            echo '<option value="' . esc_attr($week->year . '-' . $week->week_num) . '">هفته ' . esc_html($week->week_num) . ' - سال ' . esc_html($week->year) . '</option>';
+        }
+    } else {
+        echo '<option value="">هیچ هفته‌ای یافت نشد</option>';
+    }
+
+    wp_die();
+}
+add_action('wp_ajax_get_weeks', 'get_weeks_callback');
+
+// دریافت ماه‌ها از سفارشات ووکامرس
+function get_months_callback() {
+    global $wpdb;
+
+    // دریافت سفارشات بر اساس ماه
+    $months = $wpdb->get_results("
+        SELECT DISTINCT MONTH(post_date) as month_num, YEAR(post_date) as year 
+        FROM {$wpdb->prefix}posts 
+        WHERE post_type = 'shop_order' 
+        AND post_status IN ('wc-completed', 'wc-processing', 'wc-on-hold', 'wc-pending') 
+        ORDER BY post_date DESC
+    ");
+
+    if (!empty($months)) {
+        foreach ($months as $month) {
+            // نمایش ماه و سال در منوی کشویی
+            echo '<option value="' . esc_attr($month->year . '-' . $month->month_num) . '">ماه ' . esc_html($month->month_num) . ' - سال ' . esc_html($month->year) . '</option>';
+        }
+    } else {
+        echo '<option value="">هیچ ماهی یافت نشد</option>';
+    }
+
+    wp_die();
+}
+add_action('wp_ajax_get_months', 'get_months_callback');
+// دریافت هفته‌ها از سفارشات ووکامرس
+// function get_weeks_callback() {
+//     global $wpdb;
+
+//     // دریافت سفارشات بر اساس هفته
+//     $weeks = $wpdb->get_results("
+//         SELECT DISTINCT WEEK(post_date) as week_num, YEAR(post_date) as year 
+//         FROM {$wpdb->prefix}posts 
+//         WHERE post_type = 'shop_order' AND post_status IN ('wc-completed', 'wc-processing')
+//         ORDER BY post_date DESC
+//     ");
+
+//     if (!empty($weeks)) {
+//         foreach ($weeks as $week) {
+//             echo '<option value="' . esc_attr($week->year . '-' . $week->week_num) . '">هفته ' . esc_html($week->week_num) . ' - سال ' . esc_html($week->year) . '</option>';
+//         }
+//     } else {
+//         echo '<option value="">هیچ هفته‌ای یافت نشد</option>';
+//     }
+
+//     wp_die();
+// }
+// add_action('wp_ajax_get_weeks', 'get_weeks_callback');
+
+// دریافت ماه‌ها از سفارشات ووکامرس
+// function get_months_callback() {
+//     global $wpdb;
+
+//     // دریافت سفارشات بر اساس ماه
+//     $months = $wpdb->get_results("
+//         SELECT DISTINCT MONTH(post_date) as month_num, YEAR(post_date) as year 
+//         FROM {$wpdb->prefix}posts 
+//         WHERE post_type = 'shop_order' 
+//         AND post_status IN ('wc-completed', 'wc-processing', 'wc-on-hold', 'wc-pending') 
+//         ORDER BY post_date DESC
+//     ");
+
+//     if (!empty($months)) {
+//         foreach ($months as $month) {
+//             // نمایش ماه و سال در منوی کشویی
+//             echo '<option value="' . esc_attr($month->year . '-' . $month->month_num) . '">ماه ' . esc_html($month->month_num) . ' - سال ' . esc_html($month->year) . '</option>';
+//         }
+//     } else {
+//         echo '<option value="">هیچ ماهی یافت نشد</option>';
+//     }
+
+//     wp_die();
+// }
+// add_action('wp_ajax_get_months', 'get_months_callback');
 
 
